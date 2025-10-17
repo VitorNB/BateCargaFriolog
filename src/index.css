@@ -1,3 +1,11 @@
+/* src/index.css */
+
+/* AS TRÊS LINHAS MÁGICAS PARA O TAILWIND */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* SEUS ESTILOS PADRÕES ABAIXO */
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -11,3 +19,5 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+/* O Tailwind vai LER este arquivo, processar os @tailwind e ESCREVER o resultado em output.css */
