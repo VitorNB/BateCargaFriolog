@@ -231,9 +231,9 @@ export default function BateCargaConferencia() {
         const rawHeaders = raw_data[0] || [];
         const headers = rawHeaders.map(h => 
             (h || '').toString().toUpperCase().trim()
-              .replace(/"/g, '')
-              .replace(/[^A-Z0-9\s]/g, '') 
-              .replace(/\s+/g, ' ') 
+             .replace(/"/g, '')
+             .replace(/[^A-Z0-9\s]/g, '') 
+             .replace(/\s+/g, ' ') 
         );
 
         let nNFIndex = -1;
@@ -322,7 +322,7 @@ export default function BateCargaConferencia() {
             } catch (err) {
                  // Em caso de falha binária, se for XLS ou CSV mal formatado, disparamos o fallback
                  if (extension === 'xls' || extension === 'csv') {
-                    throw new Error('BINÁRIO_FALHA'); 
+                     throw new Error('BINÁRIO_FALHA'); 
                  }
                  throw err; // Erro fatal para XLSX e XLS válidos
             }
@@ -404,7 +404,7 @@ export default function BateCargaConferencia() {
     
 
     // -----------------------------------------------------------
-    // CORE: Parse XML
+    // CORE: Parse XML (INCLUINDO infAdProd para Qtde_aux)
     // -----------------------------------------------------------
     const parseNFDoc = (xmlDoc) => {
         const infNFe = findAll(xmlDoc, 'infNFe')[0] || xmlDoc;
@@ -426,6 +426,8 @@ export default function BateCargaConferencia() {
         const transporta = findAll(infNFe, 'transporta')[0];
         const transportName = findFirstText(transporta, 'xNome') || '';
         const volNode = findAll(infNFe, 'vol')[0] || findAll(findAll(infNFe, 'transp')[0], 'vol')[0] || null;
+        
+        // 1. CAMPO qVol (extraído do XML)
         const qVol = volNode ? (findFirstText(volNode, 'qVol') || '') : '';
         const pesoB = volNode ? (findFirstText(volNode, 'pesoB') || '') : '';
         const pesoL = volNode ? (findFirstText(volNode, 'pesoL') || '') : '';
@@ -442,6 +444,8 @@ export default function BateCargaConferencia() {
             const uCom = findFirstText(prod, 'uCom') || '';
             const vUnCom = findFirstText(prod, 'vUnCom') || '';
             const vProd = findFirstText(prod, 'vProd') || '';
+            
+            // 2. CAMPO Qtde_aux (extraído de infAdProd)
             const infAdProd = findFirstText(det, 'infAdProd') || '';
 
             return {
@@ -522,7 +526,7 @@ export default function BateCargaConferencia() {
                                     notes: [{ ...note, open: false }],
                                     totals: {
                                         totalPesoB: note.pesoB || 0,
-                                        totalQVol: note.qVol || 0,
+                                        totalQVol: note.qVol || 0, // DADO NOVO INCLUÍDO
                                         totalVNF: note.vNF || 0,
                                         totalNotes: 1,
                                         totalItems: note.items.length,
@@ -533,7 +537,7 @@ export default function BateCargaConferencia() {
                                 const g = grouped[idx];
                                 g.notes.push({ ...note, open: false });
                                 g.totals.totalPesoB += note.pesoB || 0;
-                                g.totals.totalQVol += note.qVol || 0;
+                                g.totals.totalQVol += note.qVol || 0; // DADO NOVO INCLUÍDO
                                 g.totals.totalVNF += note.vNF || 0;
                                 g.totals.totalNotes += 1;
                                 g.totals.totalItems += note.items.length;
@@ -614,6 +618,7 @@ export default function BateCargaConferencia() {
         );
     };
 
+    // **AJUSTE DE EXPORTAÇÃO (ADICIONANDO QVol e Qtde_aux)**
     const exportToCSV = () => {
         if (!groups || groups.length === 0) {
             setError('Nenhum dado para exportar.');
@@ -623,7 +628,7 @@ export default function BateCargaConferencia() {
         const headers = [
             'Grupo_Emitente', 'Cidade', 'nNF', 'dhEmi', 'Observacao', 'Placa_Veiculo', 'Emitente', 'Destinatario',
             'Transportadora', 'PesoB', 'QVol', 'vNF', 'cProd', 'xProd', 'qCom',
-            'Quantidade_Conferida', 'Status', 'vProd', 'uCom',
+            'Quantidade_Conferida', 'Status', 'vProd', 'uCom', 'Qtde_aux', // <-- CAMPO 'Qtde_aux' adicionado
         ];
 
         let csv = '\ufeff' + headers.join(';') + '\n';
@@ -643,9 +648,11 @@ export default function BateCargaConferencia() {
                         formatValue(n.Placa || ''), 
                         formatValue(n.emitName || ''),
                         formatValue(n.destName || ''), formatValue(n.transportName || ''), formatValue(n.pesoB || ''),
-                        formatValue(n.qVol || ''), formatValue(n.vNF || ''), formatValue(it.cProd || ''),
+                        formatValue(n.qVol || ''), // Campo 'QVol'
+                        formatValue(n.vNF || ''), formatValue(it.cProd || ''),
                         formatValue(it.xProd || ''), formatValue(it.qCom || ''), formatValue(it.Quantidade_Conferida || ''),
                         formatValue(it.Status || ''), formatValue(it.vProd || ''), formatValue(it.uCom || ''),
+                        formatValue(it.infAdProd || ''), // Campo 'Qtde_aux' (mapeado para infAdProd)
                     ];
                     csv += row.join(';') + '\n';
                 });
@@ -728,7 +735,7 @@ export default function BateCargaConferencia() {
                             {/* INPUT 1: XML UPLOAD */}
                             <label className={`cursor-pointer w-full lg:w-1/2`}>
                                 <div className={`border-2 border-dashed rounded-lg p-3 flex items-center gap-4 min-w-[300px] transition duration-200
-                                             ${fileNames.length > 0 ? 'bg-green-50 border-green-400 text-green-700' : 'bg-white border-blue-500 hover:bg-blue-50'}`}>
+                                            ${fileNames.length > 0 ? 'bg-green-50 border-green-400 text-green-700' : 'bg-white border-blue-500 hover:bg-blue-50'}`}>
                                     <Upload className="w-5 h-5 text-blue-700 flex-shrink-0" />
                                     <div>
                                         <div className="font-semibold text-sm">
@@ -751,8 +758,8 @@ export default function BateCargaConferencia() {
                             {/* INPUT 2: LOGISTICA/PLACA UPLOAD (XLS/XLSX/CSV) */}
                             <label className={`cursor-pointer w-full lg:w-1/2`}>
                                 <div className={`border-2 border-dashed rounded-lg p-3 flex items-center gap-4 min-w-[300px] transition duration-200
-                                             ${placaDataMap.size > 0 ? 'bg-indigo-50 border-indigo-400 text-indigo-700' : 'bg-white border-blue-500 hover:bg-blue-50'}
-                                             ${groups.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                            ${placaDataMap.size > 0 ? 'bg-indigo-50 border-indigo-400 text-indigo-700' : 'bg-white border-blue-500 hover:bg-blue-50'}
+                                            ${groups.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
                                     <Truck className="w-5 h-5 text-indigo-700 flex-shrink-0" />
                                     <div>
                                         <div className="font-semibold text-sm">
@@ -879,13 +886,14 @@ export default function BateCargaConferencia() {
                                                                     onClick={(e) => e.stopPropagation()}
                                                                 />
                                                             </div>
-                                                        
+                                                            
                                                             <div className="text-right flex-shrink-0 hidden sm:block">
                                                                 <div className="text-sm text-gray-500">Peso (NF)</div>
                                                                 <div className="font-bold text-gray-800">
                                                                     {n.pesoB ? Number(n.pesoB).toLocaleString('pt-BR', { maximumFractionDigits: 3 }) : '0'} kg
                                                                 </div>
-                                                                <div className="text-xs text-gray-500">Vol: {n.qVol}</div>
+                                                                {/* EXIBIÇÃO DO qVol NA NOTA */}
+                                                                <div className="text-xs text-gray-500">Volumes: {n.qVol}</div> 
                                                             </div>
 
                                                             <button
@@ -923,7 +931,15 @@ export default function BateCargaConferencia() {
                                                                             return (
                                                                                 <tr key={it.cProd + ii} className="hover:bg-gray-50">
                                                                                     <td className="px-3 py-3 align-top whitespace-nowrap text-gray-600">{it.cProd || '-'}</td>
-                                                                                    <td className="px-3 py-3 align-top text-gray-800">{it.xProd || '-'}</td>
+                                                                                    <td className="px-3 py-3 align-top text-gray-800">
+                                                                                        {it.xProd || '-'}
+                                                                                        {/* EXIBIÇÃO DO Qtde_aux (infAdProd) NA TABELA */}
+                                                                                        {it.infAdProd && (
+                                                                                            <div className="text-xs text-blue-500 mt-1 italic font-medium">
+                                                                                                Qtde_aux: {it.infAdProd}
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </td>
                                                                                     <td className="px-3 py-3 align-top text-center font-medium text-gray-700 whitespace-nowrap">{it.qCom || '-'}</td>
                                                                                     <td className="px-3 py-3 align-top text-center text-gray-600">{it.uCom || '-'}</td>
                                                                                     <td className="px-3 py-3 align-top text-right font-medium text-gray-700 whitespace-nowrap">
