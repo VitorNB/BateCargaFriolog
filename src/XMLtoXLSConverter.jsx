@@ -623,6 +623,96 @@ export default function BateCargaConferencia() {
             })
         );
     };
+    
+    // NOVO AJUSTE: Função Gerar Relatório de Conferência
+    const generateConferenceReport = () => {
+        if (groups.length === 0) {
+            setError('Nenhum dado para gerar relatório.');
+            return;
+        }
+
+        // Função que formata o conteúdo para o relatório de armazém
+        const reportContent = groups.map(g => {
+            const groupHeader = `
+                <h2>GRUPO: ${g.emitFant} / ${g.city} (${g.totals.totalNotes} NF)</h2>
+                <p>Peso Bruto Total: ${Number(g.totals.totalPesoB).toLocaleString('pt-BR', { maximumFractionDigits: 3 })} kg | Volumes: ${g.totals.totalQVol}</p>
+                <hr style="margin: 10px 0; border: 1px dashed #ccc;">
+            `;
+
+            const notesContent = g.notes.map((n, noteIndex) => {
+                const itemsList = n.items.map((it, itemIndex) => `
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 4px 8px; text-align: left;">${it.cProd}</td>
+                        <td style="padding: 4px 8px; text-align: left;">${it.xProd}</td>
+                        <td style="padding: 4px 8px; text-align: center;">${it.qCom} ${it.uCom}</td>
+                        <td style="padding: 4px 8px; text-align: center; font-weight: bold; background-color: #f0f0f0;">${it.Quantidade_Conferida || '_______'}</td>
+                        <td style="padding: 4px 8px; text-align: center; color: blue;">${it.infAdProd || '---'}</td>
+                        <td style="padding: 4px 8px; text-align: left; font-size: 10px;">___________________________</td>
+                    </tr>
+                `).join('');
+
+                return `
+                    <div style="margin-bottom: 20px; border: 1px solid #ddd; padding: 10px; border-radius: 5px;">
+                        <h3>NF: ${n.nNF} (${n.dhEmi})</h3>
+                        <p style="font-size: 12px; margin: 5px 0;">
+                            Destinatário: ${n.destName} | Placa: <span style="font-weight: bold;">${n.Placa || 'NÃO INFORMADA'}</span>
+                        </p>
+                        <table style="width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px;">
+                            <thead style="background-color: #e8e8e8;">
+                                <tr>
+                                    <th style="padding: 4px 8px; text-align: left;">CÓDIGO</th>
+                                    <th style="padding: 4px 8px; text-align: left;">PRODUTO</th>
+                                    <th style="padding: 4px 8px; text-align: center;">QTD NF</th>
+                                    <th style="padding: 4px 8px; text-align: center;">QTD CONF.</th>
+                                    <th style="padding: 4px 8px; text-align: center;">QTDE AUX.</th>
+                                    <th style="padding: 4px 8px; text-align: left;">OBS/LACRE/TEMP.</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${itemsList}
+                            </tbody>
+                        </table>
+                        <p style="font-size: 12px; margin-top: 10px;">
+                            **Observação da Conferência (Nota ${n.nNF}): ${n.Observacao || 'Sem observação'}**
+                        </p>
+                    </div>
+                `;
+            }).join('');
+
+            return `<div style="padding-bottom: 30px; page-break-after: always;">${groupHeader}${notesContent}</div>`;
+        }).join('');
+
+        const htmlContent = `
+            <html>
+            <head>
+                <title>Relatório de Conferência de Carga</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 20px; }
+                    h1 { text-align: center; color: #1e40af; }
+                    h2 { margin-top: 25px; border-bottom: 2px solid #1e40af; padding-bottom: 5px; color: #1e40af; }
+                    hr { border: none; border-top: 1px dashed #ccc; margin: 15px 0; }
+                    @media print {
+                        @page { margin: 1cm; }
+                        /* Garante que o cabeçalho do grupo comece em uma nova página se necessário */
+                        div[style*="page-break-after"] { page-break-after: always !important; }
+                    }
+                </style>
+            </head>
+            <body>
+                <h1>RELATÓRIO DE CONFERÊNCIA DE CARGA - FRIOLOG</h1>
+                <p style="text-align: right; font-size: 10px;">Data de Emissão: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}</p>
+                ${reportContent}
+            </body>
+            </html>
+        `;
+
+        // Abre em uma nova janela para impressão otimizada
+        const printWindow = window.open('', '', 'height=800,width=1000');
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
+    };
 
     // **AJUSTE DE EXPORTAÇÃO: Inclui Peso por Item (PesoB_Item e PesoL_Item) e o Qtd/Peso (qCom)**
     const exportToCSV = () => {
@@ -736,8 +826,19 @@ export default function BateCargaConferencia() {
                                     </p>
                                 </div>
                             </div>
-                            {/* Ações (Botões) */}
+                            {/* Ações (Botões) - NOVO BOTÃO ADICIONADO AQUI */}
                             <div className="flex flex-wrap items-center gap-3 mt-4 md:mt-0 md:justify-end">
+                                
+                                {/* NOVO BOTÃO: Gerar Relatório de Conferência */}
+                                <button
+                                    onClick={generateConferenceReport}
+                                    className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-full text-sm font-medium transition duration-150 ease-in-out shadow-lg shadow-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    disabled={groups.length === 0}
+                                >
+                                    <Package className="w-4 h-4" />
+                                    Gerar Relatório de Conferência
+                                </button>
+                                
                                 <button
                                     onClick={exportToCSV}
                                     className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-full text-sm font-medium transition duration-150 ease-in-out shadow-lg shadow-emerald-200 disabled:opacity-50 disabled:cursor-not-allowed"
