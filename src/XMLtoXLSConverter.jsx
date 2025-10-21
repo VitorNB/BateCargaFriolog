@@ -714,21 +714,23 @@ export default function BateCargaConferencia() {
         printWindow.print();
     };
 
-    // **AJUSTE DE EXPORTAÇÃO: Inclui Peso por Item (PesoB_Item e PesoL_Item) e o Qtd/Peso (qCom)**
+    // **AJUSTE DE EXPORTAÇÃO: Inclui Destinatário, Peso por Item (PesoB_Item e PesoL_Item) e o Qtd/Peso (qCom)**
     const exportToCSV = () => {
         if (!groups || groups.length === 0) {
             setError('Nenhum dado para exportar.');
             return;
         }
 
-        // Definindo os cabeçalhos. 'Qtd_Item_XML' é o valor do qCom.
+        // Definindo os cabeçalhos.
         const headers = [
-            'Grupo_Emitente', 'Cidade', 'nNF', 'dhEmi', 'Placa_Veiculo', 'Transportadora', 
+            'Grupo_Emitente', 'Cidade', 'nNF', 
+            'Destinatario_Nota', // <--- DESTINATÁRIO ADICIONADO AQUI
+            'dhEmi', 'Placa_Veiculo', 'Transportadora', 
             'PesoB_Nota_Total', 'QVol', 'vNF_Nota_Total', // Dados totais da nota
             'cProd', 'xProd', 
             'Qtd_Item_XML', // <--- Qtd/Peso (qCom)
-            'PesoB_Item', // <--- Peso Bruto por Item (se existir no XML item)
-            'PesoL_Item', // <--- Peso Líquido por Item (se existir no XML item)
+            'PesoB_Item', // <--- Peso Bruto por Item
+            'PesoL_Item', // <--- Peso Líquido por Item
             'Unidade_Com', 'Valor_Total_Item',
             'Qtd_Conferida', 'Status_Conferencia', 'Qtde_Aux',
             'Observacao', 
@@ -759,6 +761,7 @@ export default function BateCargaConferencia() {
 
                     const row = [
                         formatValue(g.emitFant), formatValue(g.city || ''), formatValue(n.nNF || ''),
+                        formatValue(n.destName || ''), // <--- VALOR DO DESTINATÁRIO
                         formatValue(n.dhEmi || ''), formatValue(n.Placa || ''), 
                         formatValue(n.transportName || ''), 
                         formatValue(n.pesoB || ''), // Peso Bruto Total da Nota
