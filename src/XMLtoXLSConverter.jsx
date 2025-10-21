@@ -404,7 +404,7 @@ export default function BateCargaConferencia() {
     
 
     // -----------------------------------------------------------
-    // CORE: Parse XML (INCLUINDO infAdProd para Qtde_aux E PESO POR ITEM)
+    // CORE: Parse XML (Extraindo dados do XML, incluindo Sequência de Entrega)
     // -----------------------------------------------------------
     const parseNFDoc = (xmlDoc) => {
         const infNFe = findAll(xmlDoc, 'infNFe')[0] || xmlDoc;
@@ -434,6 +434,17 @@ export default function BateCargaConferencia() {
 
         const icmstot = findAll(infNFe, 'ICMSTot')[0] || findAll(infNFe, 'total')[0];
         const vNF = icmstot ? (findFirstText(icmstot, 'vNF') || '') : findFirstText(infNFe, 'vNF') || '';
+
+        // CORREÇÃO: Extrair Sequência de Entrega do texto de <infCpl> dentro de <infAdic>
+        const infAdicNode = findAll(xmlDoc, 'infAdic')[0];
+        const infCplText = infAdicNode ? findFirstText(infAdicNode, 'infCpl') : '';
+        
+        let sequenciaEntrega = '';
+        if (infCplText) {
+             // Regex para encontrar "SEQUENCIA ENTREGA: 1" e capturar o número '1'
+            const match = infCplText.match(/SEQUENCIA ENTREGA:\s*(\d+)/i);
+            sequenciaEntrega = match ? match[1].trim() : '';
+        }
 
         const detNodes = findAll(infNFe, 'det');
         const items = detNodes.map((det) => {
@@ -474,6 +485,7 @@ export default function BateCargaConferencia() {
             rawXml: xmlDoc,
             Observacao: '', 
             Placa: '',
+            sequenciaEntrega, // O valor extraído será transportado para handleXMLUpload
         };
     };
 
@@ -502,6 +514,13 @@ export default function BateCargaConferencia() {
                     }
                     let note = parseNFDoc(xmlDoc);
                     
+                    // LÓGICA DE ATUALIZAÇÃO DA OBSERVAÇÃO COM SEQUÊNCIA DE ENTREGA (CORRIGIDA)
+                    // Garante que o campo comece com a sequência, mantendo a editabilidade.
+                    if (note.sequenciaEntrega) {
+                        const prefix = `Seq. Entrega: ${note.sequenciaEntrega}`;
+                        note.Observacao = prefix;
+                    }
+                    
                     const cleanedNnf = normalizeNnf(note.nNF);
                     const placaInfo = placaDataMap.get(cleanedNnf);
                     if (placaInfo) {
@@ -529,7 +548,8 @@ export default function BateCargaConferencia() {
                                     emitName: note.emitName,
                                     city: note.destCity,
                                     uf: note.destUF,
-                                    notes: [{ ...note, open: false }],
+                                    // Note.Observacao já está ajustado acima
+                                    notes: [{ ...note, open: false }], 
                                     totals: {
                                         totalPesoB: note.pesoB || 0,
                                         totalQVol: note.qVol || 0, 
@@ -541,7 +561,8 @@ export default function BateCargaConferencia() {
                                 });
                             } else {
                                 const g = grouped[idx];
-                                g.notes.push({ ...note, open: false });
+                                // Note.Observacao já está ajustado acima
+                                g.notes.push({ ...note, open: false }); 
                                 g.totals.totalPesoB += note.pesoB || 0;
                                 g.totals.totalQVol += note.qVol || 0; 
                                 g.totals.totalVNF += note.vNF || 0;
@@ -724,13 +745,13 @@ export default function BateCargaConferencia() {
         // Definindo os cabeçalhos.
         const headers = [
             'Grupo_Emitente', 'Cidade', 'nNF', 
-            'Destinatario_Nota', // <--- DESTINATÁRIO ADICIONADO AQUI
+            'Destinatario_Nota',
             'dhEmi', 'Placa_Veiculo', 'Transportadora', 
             'PesoB_Nota_Total', 'QVol', 'vNF_Nota_Total', // Dados totais da nota
             'cProd', 'xProd', 
-            'Qtd_Item_XML', // <--- Qtd/Peso (qCom)
-            'PesoB_Item', // <--- Peso Bruto por Item
-            'PesoL_Item', // <--- Peso Líquido por Item
+            'Qtd_Item_XML', // Qtd/Peso (qCom)
+            'PesoB_Item', 
+            'PesoL_Item', 
             'Unidade_Com', 'Valor_Total_Item',
             'Qtd_Conferida', 'Status_Conferencia', 'Qtde_Aux',
             'Observacao', 
@@ -761,7 +782,7 @@ export default function BateCargaConferencia() {
 
                     const row = [
                         formatValue(g.emitFant), formatValue(g.city || ''), formatValue(n.nNF || ''),
-                        formatValue(n.destName || ''), // <--- VALOR DO DESTINATÁRIO
+                        formatValue(n.destName || ''), 
                         formatValue(n.dhEmi || ''), formatValue(n.Placa || ''), 
                         formatValue(n.transportName || ''), 
                         formatValue(n.pesoB || ''), // Peso Bruto Total da Nota
@@ -1094,6 +1115,7 @@ export default function BateCargaConferencia() {
                                                                                         <input
                                                                                             type="number"
                                                                                             value={it.Quantidade_Conferida || ''}
+                                                             
                                                                                             onChange={(ev) => handleQuantidadeChange(g.key, ni, ii, ev.target.value)}
                                                                                             className="w-full border border-gray-300 rounded-lg px-2 py-1 text-center text-sm shadow-inner focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                                                                             placeholder="0"
@@ -1108,13 +1130,13 @@ export default function BateCargaConferencia() {
                                                                         })}
                                                                     </tbody>
                                                                 </table>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            ))}
+        </div>
+    </div>
                                 )}
                             </div>
                         );
