@@ -404,7 +404,7 @@ export default function BateCargaConferencia() {
     
 
     // -----------------------------------------------------------
-    // CORE: Parse XML (INCLUINDO infAdProd para Qtde_aux)
+    // CORE: Parse XML (INCLUINDO infAdProd para Qtde_aux E PESO POR ITEM)
     // -----------------------------------------------------------
     const parseNFDoc = (xmlDoc) => {
         const infNFe = findAll(xmlDoc, 'infNFe')[0] || xmlDoc;
@@ -425,12 +425,12 @@ export default function BateCargaConferencia() {
 
         const transporta = findAll(infNFe, 'transporta')[0];
         const transportName = findFirstText(transporta, 'xNome') || '';
-        const volNode = findAll(infNFe, 'vol')[0] || findAll(findAll(infNFe, 'transp')[0], 'vol')[0] || null;
         
-        // 1. CAMPO qVol (extraído do XML)
+        // Peso da nota (Total da NF) - MANTIDO para a nota e exibição no UI
+        const volNode = findAll(infNFe, 'vol')[0] || findAll(findAll(infNFe, 'transp')[0], 'vol')[0] || null;
         const qVol = volNode ? (findFirstText(volNode, 'qVol') || '') : '';
-        const pesoB = volNode ? (findFirstText(volNode, 'pesoB') || '') : '';
-        const pesoL = volNode ? (findFirstText(volNode, 'pesoL') || '') : '';
+        const pesoBNota = volNode ? (findFirstText(volNode, 'pesoB') || '') : ''; 
+        const pesoLNota = volNode ? (findFirstText(volNode, 'pesoL') || '') : ''; 
 
         const icmstot = findAll(infNFe, 'ICMSTot')[0] || findAll(infNFe, 'total')[0];
         const vNF = icmstot ? (findFirstText(icmstot, 'vNF') || '') : findFirstText(infNFe, 'vNF') || '';
@@ -445,11 +445,17 @@ export default function BateCargaConferencia() {
             const vUnCom = findFirstText(prod, 'vUnCom') || '';
             const vProd = findFirstText(prod, 'vProd') || '';
             
-            // 2. CAMPO Qtde_aux (extraído de infAdProd)
+            // EXTRAÇÃO DE PESO POR ITEM: Se existirem nos tags <prod>
+            const pesoBItem = findFirstText(prod, 'pesoB') || ''; 
+            const pesoLItem = findFirstText(prod, 'pesoL') || ''; 
+            
+            // CAMPO Qtde_aux (extraído de infAdProd)
             const infAdProd = findFirstText(det, 'infAdProd') || '';
 
             return {
                 cProd, xProd, qCom, uCom, vUnCom, vProd, infAdProd,
+                pesoBItem: parseFloat(pesoBItem) || 0, // Peso Bruto do Item
+                pesoLItem: parseFloat(pesoLItem) || 0, // Peso Líquido do Item
                 Quantidade_Conferida: '',
                 Status: '',
             };
@@ -461,8 +467,8 @@ export default function BateCargaConferencia() {
         return {
             chNFe, nNF, dhEmi, emitName, emitFant, destName, destCity, destUF, transportName,
             qVol: parseFloat(qVol) || 0,
-            pesoB: parseFloat(pesoB) || 0,
-            pesoL: parseFloat(pesoL) || 0,
+            pesoB: parseFloat(pesoBNota) || 0, // Peso total da nota (Original)
+            pesoL: parseFloat(pesoLNota) || 0, 
             vNF: parseFloat(vNF) || 0,
             items,
             rawXml: xmlDoc,
@@ -526,7 +532,7 @@ export default function BateCargaConferencia() {
                                     notes: [{ ...note, open: false }],
                                     totals: {
                                         totalPesoB: note.pesoB || 0,
-                                        totalQVol: note.qVol || 0, // DADO NOVO INCLUÍDO
+                                        totalQVol: note.qVol || 0, 
                                         totalVNF: note.vNF || 0,
                                         totalNotes: 1,
                                         totalItems: note.items.length,
@@ -537,7 +543,7 @@ export default function BateCargaConferencia() {
                                 const g = grouped[idx];
                                 g.notes.push({ ...note, open: false });
                                 g.totals.totalPesoB += note.pesoB || 0;
-                                g.totals.totalQVol += note.qVol || 0; // DADO NOVO INCLUÍDO
+                                g.totals.totalQVol += note.qVol || 0; 
                                 g.totals.totalVNF += note.vNF || 0;
                                 g.totals.totalNotes += 1;
                                 g.totals.totalItems += note.items.length;
@@ -618,17 +624,24 @@ export default function BateCargaConferencia() {
         );
     };
 
-    // **AJUSTE DE EXPORTAÇÃO (ADICIONANDO QVol e Qtde_aux)**
+    // **AJUSTE DE EXPORTAÇÃO: Inclui Peso por Item (PesoB_Item e PesoL_Item) e o Qtd/Peso (qCom)**
     const exportToCSV = () => {
         if (!groups || groups.length === 0) {
             setError('Nenhum dado para exportar.');
             return;
         }
 
+        // Definindo os cabeçalhos. 'Qtd_Item_XML' é o valor do qCom.
         const headers = [
-            'Grupo_Emitente', 'Cidade', 'nNF', 'dhEmi', 'Observacao', 'Placa_Veiculo', 'Emitente', 'Destinatario',
-            'Transportadora', 'PesoB', 'QVol', 'vNF', 'cProd', 'xProd', 'qCom',
-            'Quantidade_Conferida', 'Status', 'vProd', 'uCom', 'Qtde_aux', // <-- CAMPO 'Qtde_aux' adicionado
+            'Grupo_Emitente', 'Cidade', 'nNF', 'dhEmi', 'Placa_Veiculo', 'Transportadora', 
+            'PesoB_Nota_Total', 'QVol', 'vNF_Nota_Total', // Dados totais da nota
+            'cProd', 'xProd', 
+            'Qtd_Item_XML', // <--- Qtd/Peso (qCom)
+            'PesoB_Item', // <--- Peso Bruto por Item (se existir no XML item)
+            'PesoL_Item', // <--- Peso Líquido por Item (se existir no XML item)
+            'Unidade_Com', 'Valor_Total_Item',
+            'Qtd_Conferida', 'Status_Conferencia', 'Qtde_Aux',
+            'Observacao', 
         ];
 
         let csv = '\ufeff' + headers.join(';') + '\n';
@@ -639,20 +652,42 @@ export default function BateCargaConferencia() {
                         if (val === null || val === undefined) return '""';
                         let str = val.toString();
                         str = str.replace(/\n/g, ' ').replace(/"/g, '""');
+                        
+                        // Se for número, formatar com 4 casas decimais e vírgula como separador decimal
+                        if (typeof val === 'number' || (typeof val === 'string' && !isNaN(parseFloat(val)))) {
+                            // Tenta converter para número, formata e substitui o ponto decimal por vírgula
+                            try {
+                                const num = parseFloat(str);
+                                str = num.toFixed(4).replace('.', ','); 
+                            } catch (e) {
+                                // Em caso de erro, apenas mantém a string
+                                str = val.toString().replace(/\n/g, ' ').replace(/"/g, '""');
+                            }
+                        }
                         return `"${str}"`;
                     };
 
                     const row = [
                         formatValue(g.emitFant), formatValue(g.city || ''), formatValue(n.nNF || ''),
-                        formatValue(n.dhEmi || ''), formatValue(n.Observacao || ''), 
-                        formatValue(n.Placa || ''), 
-                        formatValue(n.emitName || ''),
-                        formatValue(n.destName || ''), formatValue(n.transportName || ''), formatValue(n.pesoB || ''),
-                        formatValue(n.qVol || ''), // Campo 'QVol'
-                        formatValue(n.vNF || ''), formatValue(it.cProd || ''),
-                        formatValue(it.xProd || ''), formatValue(it.qCom || ''), formatValue(it.Quantidade_Conferida || ''),
-                        formatValue(it.Status || ''), formatValue(it.vProd || ''), formatValue(it.uCom || ''),
-                        formatValue(it.infAdProd || ''), // Campo 'Qtde_aux' (mapeado para infAdProd)
+                        formatValue(n.dhEmi || ''), formatValue(n.Placa || ''), 
+                        formatValue(n.transportName || ''), 
+                        formatValue(n.pesoB || ''), // Peso Bruto Total da Nota
+                        formatValue(n.qVol || ''), 
+                        formatValue(n.vNF || ''), 
+                        formatValue(it.cProd || ''),
+                        formatValue(it.xProd || ''), 
+                        
+                        formatValue(it.qCom || ''), // Qtd_Item_XML (qCom)
+                        
+                        formatValue(it.pesoBItem), // Peso Bruto do Item
+                        formatValue(it.pesoLItem), // Peso Líquido do Item
+                        
+                        formatValue(it.uCom || ''),
+                        formatValue(it.vProd || ''), 
+                        formatValue(it.Quantidade_Conferida || ''),
+                        formatValue(it.Status || ''),
+                        formatValue(it.infAdProd || ''), 
+                        formatValue(n.Observacao || ''),
                     ];
                     csv += row.join(';') + '\n';
                 });
@@ -735,7 +770,7 @@ export default function BateCargaConferencia() {
                             {/* INPUT 1: XML UPLOAD */}
                             <label className={`cursor-pointer w-full lg:w-1/2`}>
                                 <div className={`border-2 border-dashed rounded-lg p-3 flex items-center gap-4 min-w-[300px] transition duration-200
-                                            ${fileNames.length > 0 ? 'bg-green-50 border-green-400 text-green-700' : 'bg-white border-blue-500 hover:bg-blue-50'}`}>
+                                        ${fileNames.length > 0 ? 'bg-green-50 border-green-400 text-green-700' : 'bg-white border-blue-500 hover:bg-blue-50'}`}>
                                     <Upload className="w-5 h-5 text-blue-700 flex-shrink-0" />
                                     <div>
                                         <div className="font-semibold text-sm">
@@ -758,8 +793,8 @@ export default function BateCargaConferencia() {
                             {/* INPUT 2: LOGISTICA/PLACA UPLOAD (XLS/XLSX/CSV) */}
                             <label className={`cursor-pointer w-full lg:w-1/2`}>
                                 <div className={`border-2 border-dashed rounded-lg p-3 flex items-center gap-4 min-w-[300px] transition duration-200
-                                            ${placaDataMap.size > 0 ? 'bg-indigo-50 border-indigo-400 text-indigo-700' : 'bg-white border-blue-500 hover:bg-blue-50'}
-                                            ${groups.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                        ${placaDataMap.size > 0 ? 'bg-indigo-50 border-indigo-400 text-indigo-700' : 'bg-white border-blue-500 hover:bg-blue-50'}
+                                        ${groups.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
                                     <Truck className="w-5 h-5 text-indigo-700 flex-shrink-0" />
                                     <div>
                                         <div className="font-semibold text-sm">
@@ -937,6 +972,12 @@ export default function BateCargaConferencia() {
                                                                                         {it.infAdProd && (
                                                                                             <div className="text-xs text-blue-500 mt-1 italic font-medium">
                                                                                                 Qtde_aux: {it.infAdProd}
+                                                                                            </div>
+                                                                                        )}
+                                                                                        {/* EXIBIÇÃO DO PESO DO ITEM NA TABELA (OPCIONAL, para visualização) */}
+                                                                                        {(it.pesoBItem > 0 || it.pesoLItem > 0) && (
+                                                                                            <div className="text-xs text-gray-500 mt-1">
+                                                                                                Peso Item: B: {it.pesoBItem.toLocaleString('pt-BR')}kg | L: {it.pesoLItem.toLocaleString('pt-BR')}kg
                                                                                             </div>
                                                                                         )}
                                                                                     </td>
